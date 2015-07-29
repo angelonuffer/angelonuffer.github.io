@@ -1,0 +1,27 @@
+div.links a {
+	background-color: #66FF66;
+	color: black;
+	text-decoration: none;
+	border-radius: 5px;
+	padding: 3px;
+	border-style: outset;
+	border-width: 1px;
+}
+
+div.links a:hover {
+	border-style: inset;
+}
+
+div.organization {
+	background-color: #99FF99;
+	border-radius: 10px;
+	padding: 8px;
+	margin-bottom: 10px;
+}
+
+div#organizations {
+	background-color: #CCFFCC;
+	border-radius: 10px;
+	padding: 8px;
+	margin-top: 10px;
+}
