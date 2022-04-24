@@ -1,0 +1,44 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<span class="botão" id="iniciar">
+  <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7Z" />
+  </svg>
+  <span>Iniciar captura</span>
+</span>
+<span class="botão escondido" id="parar">
+  <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4M9,9V15H15V9" />
+  </svg>
+  <span>Parar captura</span>
+</span>
+<link rel="stylesheet" href="/interface.css" />
+<script>
+  const span_iniciar = document.querySelector("span#iniciar")
+  const span_parar = document.querySelector("span#parar")
+  let fluxo
+  span_iniciar.onclick = async () => {
+    fluxo = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+    })
+    const gravador = new MediaRecorder(fluxo)
+    const chunks = []
+    gravador.ondataavailable = e => chunks.push(e.data)
+    gravador.start()
+    gravador.onstop = () => {
+      const blob = new Blob(chunks, { type: chunks[0].type })
+      const video = document.createElement("video")
+      document.body.appendChild(video)
+      video.controls = true
+      video.src = URL.createObjectURL(blob)
+      span_iniciar.classList.remove("escondido")
+      span_parar.classList.add("escondido")
+    }
+    span_iniciar.classList.add("escondido")
+    span_parar.classList.remove("escondido")
+  }
+  span_parar.onclick = async () => {
+    fluxo.getTracks().forEach(t => t.stop())
+  }
+</script>
