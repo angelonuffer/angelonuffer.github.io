@@ -12,37 +12,48 @@
   </svg>
   <span>Parar captura</span>
 </span>
+<span class="botão escondido" id="salvar">
+  <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M8 17V15H16V17H8M16 10L12 14L8 10H10.5V6H13.5V10H16M12 2C17.5 2 22 6.5 22 12C22 17.5 17.5 22 12 22C6.5 22 2 17.5 2 12C2 6.5 6.5 2 12 2M12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C16.42 20 20 16.42 20 12C20 7.58 16.42 4 12 4Z" />
+  </svg>
+  <span>Salvar captura</span>
+</span>
 <span class="botão escondido" id="descartar">
   <svg style="width:24px;height:24px" viewBox="0 0 24 24">
     <path fill="currentColor" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M16,10V17A1,1 0 0,1 15,18H9A1,1 0 0,1 8,17V10H16M13.5,6L14.5,7H17V9H7V7H9.5L10.5,6H13.5Z" />
   </svg>
   <span>Descartar captura</span>
 </span>
-<video controls></video>
+<span>Tamanho da captura armazenada: <span id="tamanho">0</span></span>
 <link rel="stylesheet" href="/interface.css" />
 <script>
   const span_iniciar = document.querySelector("span#iniciar")
   const span_parar = document.querySelector("span#parar")
+  const span_salvar = document.querySelector("span#salvar")
   const span_descartar = document.querySelector("span#descartar")
-  const video = document.querySelector("video")
+  const span_tamanho = document.querySelector("span#tamanho")
   const request_db = indexedDB.open("Gravador", 1)
+  let tamanho = 0
   request_db.onupgradeneeded = e => {
     e.target.result.createObjectStore("partes", {autoIncrement: true})
   }
   request_db.onsuccess = e => {
     const db = e.target.result
+    let resultado
     const carregar_video = () => {
-      let resultado
+      tamanho = 0
       db.transaction("partes").objectStore("partes").openCursor().onsuccess = e => {
         const cursor = e.target.result
         if (cursor) {
           if (resultado === undefined) resultado = cursor.value
           else resultado = new Blob([resultado, cursor.value], {type: resultado.type})
+          tamanho += cursor.value.size
+          span_tamanho.textContent = tamanho
+          span_iniciar.classList.add("escondido")
           cursor.continue()
         } else {
           if (resultado !== undefined) {
-            video.src = URL.createObjectURL(resultado)
-            span_iniciar.classList.add("escondido")
+            span_salvar.classList.remove("escondido")
             span_descartar.classList.remove("escondido")
           }
         }
@@ -55,17 +66,17 @@
         video: true,
         audio: true,
       })
-      video.srcObject = fluxo
-      video.play()
       const gravador = new MediaRecorder(fluxo)
       gravador.start(1)
       gravador.ondataavailable = e => {
         db.transaction(["partes"], "readwrite").objectStore("partes").add(e.data)
+        tamanho += e.data.size
+        span_tamanho.textContent = tamanho
       }
       gravador.onstop = e => {
-        video.srcObject = null
         carregar_video()
         span_parar.classList.add("escondido")
+        span_salvar.classList.remove("escondido")
         span_descartar.classList.remove("escondido")
       }
       span_iniciar.classList.add("escondido")
@@ -74,12 +85,22 @@
     span_parar.onclick = async () => {
       fluxo.getTracks().forEach(t => t.stop())
     }
+    span_salvar.onclick = () => {
+      const a = document.createElement("a")
+      a.href = URL.createObjectURL(resultado)
+      a.download = "captura.webm"
+      document.body.append(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(a.href)
+    }
     span_descartar.onclick = () => {
       if (confirm("Tem certeza que deseja descartar a captura armazenada?")) {
         db.transaction(["partes"], "readwrite").objectStore("partes").clear()
-        video.src = ""
-        video.srcObject = null
+        tamanho = 0
+        span_tamanho.textContent = tamanho
         span_iniciar.classList.remove("escondido")
+        span_salvar.classList.add("escondido")
         span_descartar.classList.add("escondido")
       }
     }
