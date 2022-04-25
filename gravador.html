@@ -12,33 +12,76 @@
   </svg>
   <span>Parar captura</span>
 </span>
+<span class="botão escondido" id="descartar">
+  <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M16,10V17A1,1 0 0,1 15,18H9A1,1 0 0,1 8,17V10H16M13.5,6L14.5,7H17V9H7V7H9.5L10.5,6H13.5Z" />
+  </svg>
+  <span>Descartar captura</span>
+</span>
+<video controls></video>
 <link rel="stylesheet" href="/interface.css" />
 <script>
   const span_iniciar = document.querySelector("span#iniciar")
   const span_parar = document.querySelector("span#parar")
-  let fluxo
-  span_iniciar.onclick = async () => {
-    fluxo = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: true,
-    })
-    const gravador = new MediaRecorder(fluxo)
-    const chunks = []
-    gravador.ondataavailable = e => chunks.push(e.data)
-    gravador.start()
-    gravador.onstop = () => {
-      const blob = new Blob(chunks, { type: chunks[0].type })
-      const video = document.createElement("video")
-      document.body.appendChild(video)
-      video.controls = true
-      video.src = URL.createObjectURL(blob)
-      span_iniciar.classList.remove("escondido")
-      span_parar.classList.add("escondido")
-    }
-    span_iniciar.classList.add("escondido")
-    span_parar.classList.remove("escondido")
+  const span_descartar = document.querySelector("span#descartar")
+  const video = document.querySelector("video")
+  const request_db = indexedDB.open("Gravador", 1)
+  request_db.onupgradeneeded = e => {
+    e.target.result.createObjectStore("partes", {autoIncrement: true})
   }
-  span_parar.onclick = async () => {
-    fluxo.getTracks().forEach(t => t.stop())
+  request_db.onsuccess = e => {
+    const db = e.target.result
+    const carregar_video = () => {
+      let resultado
+      db.transaction("partes").objectStore("partes").openCursor().onsuccess = e => {
+        const cursor = e.target.result
+        if (cursor) {
+          if (resultado === undefined) resultado = cursor.value
+          else resultado = new Blob([resultado, cursor.value], {type: resultado.type})
+          cursor.continue()
+        } else {
+          if (resultado !== undefined) {
+            video.src = URL.createObjectURL(resultado)
+            span_iniciar.classList.add("escondido")
+            span_descartar.classList.remove("escondido")
+          }
+        }
+      }
+    }
+    carregar_video()
+    let fluxo
+    span_iniciar.onclick = async () => {
+      fluxo = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      })
+      video.srcObject = fluxo
+      video.play()
+      const gravador = new MediaRecorder(fluxo)
+      gravador.start(1)
+      gravador.ondataavailable = e => {
+        db.transaction(["partes"], "readwrite").objectStore("partes").add(e.data)
+      }
+      gravador.onstop = e => {
+        video.srcObject = null
+        carregar_video()
+        span_parar.classList.add("escondido")
+        span_descartar.classList.remove("escondido")
+      }
+      span_iniciar.classList.add("escondido")
+      span_parar.classList.remove("escondido")
+    }
+    span_parar.onclick = async () => {
+      fluxo.getTracks().forEach(t => t.stop())
+    }
+    span_descartar.onclick = () => {
+      if (confirm("Tem certeza que deseja descartar a captura armazenada?")) {
+        db.transaction(["partes"], "readwrite").objectStore("partes").clear()
+        video.src = ""
+        video.srcObject = null
+        span_iniciar.classList.remove("escondido")
+        span_descartar.classList.add("escondido")
+      }
+    }
   }
 </script>
