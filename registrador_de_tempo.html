@@ -1,0 +1,266 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registrador de tempo</title>
+<link rel="stylesheet" href="/interface.css" />
+<datalist id="nomes_projetos"></datalist>
+<input id="dia" type="date" />
+<table>
+  <thead>
+    <td>Projeto</td>
+    <td>Início</td>
+    <td>Fim</td>
+    <td>Duração</td>
+    <td></td>
+  </thead>
+  <tbody id="projetos">
+    <tr id="linha_projeto">
+      <td><input id="nome_projeto" type="text" list="nomes_projetos" /></td>
+      <td><input id="início" type="time" /></td>
+      <td><input id="fim" type="time" /></td>
+      <td id="duração">0:00</td>
+    </tr>
+  </tbody>
+</table>
+<span id="registrar_tempo" class="botão">
+  <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M14.47 15.08L11 13V7H12.5V12.25L15.58 14.08C15.17 14.36 14.79 14.7 14.47 15.08M13.08 19.92C12.72 19.97 12.37 20 12 20C7.58 20 4 16.42 4 12S7.58 4 12 4 20 7.58 20 12C20 12.37 19.97 12.72 19.92 13.08C20.61 13.18 21.25 13.4 21.84 13.72C21.94 13.16 22 12.59 22 12C22 6.5 17.5 2 12 2S2 6.5 2 12C2 17.5 6.47 22 12 22C12.59 22 13.16 21.94 13.72 21.84C13.4 21.25 13.18 20.61 13.08 19.92M18 15V18H15V20H18V23H20V20H23V18H20V15H18Z" />
+  </svg>
+  Registrar tempo
+</span>
+<table>
+  <thead>
+    <td>Projeto</td>
+    <td>Dia</td>
+    <td>Mês</td>
+  </thead>
+  <tbody id="totais_por_projeto"></tbody>
+  <tfoot>
+    <td></td>
+    <td id="total_dia">0:00</td>
+    <td id="total_mês">0:00</td>
+  </tfoot>
+</table>
+<span hidden>
+  <table>
+    <td id="modelo_eliminar_linha">
+      <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+        <path fill="currentColor" d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z" />
+      </svg>
+    </td>
+    <tr id="modelo_total_por_projeto">
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </table>
+</span>
+<span id="carregando"></span>
+
+<style>
+  tfoot td {
+    border-top-style: solid;
+    border-width: 1px;
+    border-color: #000;
+  }
+</style>
+
+<script>
+  const input_dia = document.querySelector("input#dia")
+  const datalist_nomes_projetos = document.querySelector("datalist#nomes_projetos")
+  const nomes_projetos = []
+  const modelo_eliminar_linha = document.querySelector("td#modelo_eliminar_linha")
+  const modelo_total_por_projeto = document.querySelector("tr#modelo_total_por_projeto")
+  const tr_linha_projeto = document.querySelector("tr#linha_projeto")
+  const tbody_projetos = document.querySelector("tbody#projetos")
+  const span_carregando = document.querySelector("span#carregando")
+  const tbody_totais_por_projeto = document.querySelector("tbody#totais_por_projeto")
+  const td_total_dia = document.querySelector("td#total_dia")
+  const td_total_mês = document.querySelector("td#total_mês")
+  const requisição = indexedDB.open(location.pathname + location.hash, 1)
+  requisição.onupgradeneeded = e => {
+    const atividades = e.target.result.createObjectStore("atividades", { autoIncrement: true  })
+    atividades.createIndex("data", "data", { unique: false })
+    atividades.createIndex("mês", "mês", { unique: false })
+  }
+  let db
+  let deve_atualizar_dados = false
+  requisição.onsuccess = e => {
+    span_carregando.hidden = true
+    db = e.target.result
+    input_dia.valueAsDate = new Date()
+    input_dia.dispatchEvent(new Event("change"))
+  }
+  Element.prototype.ancestral = function (tipo) {
+    if (this.nodeName === tipo) return this
+    return this.parentElement.ancestral(tipo)
+  }
+  const adicionar_atividade = (projeto, início, fim) => {
+    const nova_linha = tr_linha_projeto.cloneNode(true)
+    const inputs = nova_linha.querySelectorAll("input")
+    inputs[0].value = projeto
+    inputs[1].value = início
+    inputs[2].value = fim
+    nova_linha.querySelectorAll("input").forEach(input => {
+      input.onchange = e => {
+        const atividades = db.transaction(["atividades"], "readwrite").objectStore("atividades")
+        const tr = e.target.ancestral("TR")
+        const td_duração = tr.querySelector("td#duração")
+        if (e.target.type === "time") {
+          const início = tr.querySelector("input#início").valueAsDate
+          const fim = tr.querySelector("input#fim").valueAsDate
+          if (início !== null && fim !== null) {
+            atualizar_duração(td_duração, (fim - início) / 1000 / 60)
+          }
+          if (início !== null && fim === null) {
+            const agora = new Date()
+            atualizar_duração(td_duração, agora.getHours() * 60 + agora.getMinutes() - início / 1000 / 60)
+            span_carregando.hidden = false
+            atividades.get(tr.db_id).onsuccess = e => {
+              span_carregando.hidden = true
+              e.target.result.duração = td_duração.duração
+              atividades.put(e.target.result, tr.db_id)
+            }
+          }
+        }
+        const input_nome_projeto = tr.querySelector("input#nome_projeto")
+        if (nomes_projetos.indexOf(input_nome_projeto.value) === -1) {
+          nomes_projetos.push(input_nome_projeto.value)
+          const option = document.createElement("option")
+          option.value = input_nome_projeto.value
+          datalist_nomes_projetos.appendChild(option)
+        }
+        if (! deve_atualizar_dados) return
+        span_carregando.hidden = false
+        atividades.get(tr.db_id).onsuccess = function (campo, valor, e) {
+          span_carregando.hidden = true
+          e.target.result[campo] = valor
+          e.target.result.duração = td_duração.duração
+          atividades.put(e.target.result, tr.db_id).onsuccess = () => {
+            atualizar_totais()
+          }
+        }.bind(this, e.target.id, e.target.value)
+      }
+    })
+    const eliminar_linha = modelo_eliminar_linha.cloneNode(true)
+    nova_linha.appendChild(eliminar_linha)
+    eliminar_linha.onclick = e => {
+      const tr = e.target.ancestral("TR")
+      db.transaction(["atividades"], "readwrite").objectStore("atividades").delete(tr.db_id).onsuccess = () => {
+        atualizar_totais()
+      }
+      tr.parentElement.removeChild(tr)
+    }
+    tbody_projetos.insertBefore(nova_linha, tr_linha_projeto)
+    return nova_linha
+  }
+  input_dia.onchange = () => {
+    deve_atualizar_dados = false
+    while (tbody_projetos.children.length > 1) {
+      tbody_projetos.removeChild(tbody_projetos.children[0])
+    }
+    span_carregando.hidden = false
+    db.transaction(["atividades"]).objectStore("atividades").index("data").openCursor(IDBKeyRange.only(input_dia.value)).onsuccess = e => {
+      const cursor = e.target.result
+      if (cursor) {
+        const tr = adicionar_atividade(cursor.value.nome_projeto, cursor.value.início, cursor.value.fim)
+        tr.db_id = cursor.primaryKey
+        tr.querySelector("input[type=\"time\"]").dispatchEvent(new Event("change"))
+        cursor.continue()
+      } else {
+        deve_atualizar_dados = true
+        atualizar_totais()
+        span_carregando.hidden = true
+      }
+    }
+  }
+  const atualizar_totais = () => {
+    const mês = input_dia.valueAsDate.getFullYear() + "-" + String(input_dia.valueAsDate.getMonth() + 1).padStart(2, "0")
+    span_carregando.hidden = false
+    const projetos = {}
+    tbody_totais_por_projeto.textContent = ""
+    let total_dia = 0
+    let total_mês = 0
+    db.transaction(["atividades"]).objectStore("atividades").index("mês").openCursor(IDBKeyRange.only(mês)).onsuccess = e => {
+      const cursor = e.target.result
+      if (cursor) {
+        if (! projetos.hasOwnProperty(cursor.value.nome_projeto)) projetos[cursor.value.nome_projeto] = {
+          dia: 0,
+          mês: 0,
+        }
+        if (cursor.value.data === input_dia.value) {
+          projetos[cursor.value.nome_projeto].dia += cursor.value.duração
+          total_dia += cursor.value.duração
+        }
+        projetos[cursor.value.nome_projeto].mês += cursor.value.duração
+        total_mês += cursor.value.duração
+        cursor.continue()
+      } else {
+        Object.keys(projetos).forEach(projeto => {
+          if (nomes_projetos.indexOf(projeto) === -1) {
+            nomes_projetos.push(projeto)
+            const option = document.createElement("option")
+            option.value = projeto
+            datalist_nomes_projetos.appendChild(option)
+          }
+          const tr = modelo_total_por_projeto.cloneNode(true)
+          tr.children[0].textContent = projeto
+          tr.children[1].textContent = Math.floor(projetos[projeto].dia / 60) + ":" + String(projetos[projeto].dia % 60).padStart(2, "0")
+          tr.children[2].textContent = Math.floor(projetos[projeto].mês / 60) + ":" + String(projetos[projeto].mês % 60).padStart(2, "0")
+          tbody_totais_por_projeto.appendChild(tr)
+        })
+        td_total_dia.textContent = Math.floor(total_dia / 60) + ":" + String(total_dia % 60).padStart(2, "0")
+        td_total_mês.textContent = Math.floor(total_mês / 60) + ":" + String(total_mês % 60).padStart(2, "0")
+        span_carregando.hidden = true
+      }
+    }
+  }
+  const atualizar_duração = (td, duração) => {
+    td.textContent = Math.floor(duração / 60) + ":" + String(duração % 60).padStart(2, "0")
+    td.duração = duração
+  }
+  tr_linha_projeto.querySelectorAll("input").forEach(input => {
+    input.onchange = e => {
+      let nova_linha
+      if (e.target.id === "nome_projeto") nova_linha = adicionar_atividade(e.target.value, "", "")
+      if (e.target.id === "início") nova_linha = adicionar_atividade("", e.target.value, "")
+      if (e.target.id === "fim") nova_linha = adicionar_atividade("", "", e.target.value)
+      e.target.value = null
+      const inputs = nova_linha.querySelectorAll("input")
+      if (nova_linha.db_id === undefined) {
+        span_carregando.hidden = false
+        db.transaction(["atividades"], "readwrite").objectStore("atividades").add({
+          data: input_dia.value,
+          mês: input_dia.valueAsDate.getFullYear() + "-" + String(input_dia.valueAsDate.getMonth() + 1).padStart(2, "0"),
+          nome_projeto: inputs[0].value,
+          início: inputs[1].value,
+          fim: inputs[2].value,
+          duração: 0,
+        }).onsuccess = e => {
+          span_carregando.hidden = true
+          nova_linha.db_id = e.target.result
+        }
+      }
+    }
+  })
+  document.querySelector("span#registrar_tempo").onclick = () => {
+    [...tbody_projetos.querySelectorAll("tr")].some(tr => {
+      return [...tr.querySelectorAll("input[type=\"time\"")].some(input => {
+        if (input.value === "") {
+          const agora = new Date()
+          input.value = agora.getHours() + ":" + String(agora.getMinutes()).padStart(2, "0")
+          input.dispatchEvent(new Event("change"))
+          return true
+        }
+      })
+    })
+  }
+  const atualizar_finais = () => {
+    const finais = document.querySelectorAll("input#fim")
+    deve_atualizar_dados = false
+    for (var i = 0; i < finais.length - 1; i++) finais[i].dispatchEvent(new Event("change"))
+    deve_atualizar_dados = true
+    atualizar_totais()
+    setTimeout(atualizar_finais, (60 * 1000) - new Date() % (60 * 1000))
+  }
+  setTimeout(atualizar_finais, (60 * 1000) - new Date() % (60 * 1000))
+</script>

@@ -1,0 +1,78 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camada P2PT</title>
+<link rel="stylesheet" href="/interface.css" />
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/subins2000/p2pt/dist/p2pt.umd.min.js"></script>
+<div class="linha">
+  <input id="sala" class="expandido" type="text" value="Camada P2PT" />
+  <svg id="iniciar" style="width:24px;height:24px" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M10,16.5L16,12L10,7.5V16.5Z" />
+  </svg>
+</div>
+<span>ID: <span id="peerid" /></span>
+<ul id="trackers_conectados"></ul>
+<span hidden>
+  <div id="modelo_peer" class="caixa">
+    <span>ID: <span id="peerid"></span></span>
+    <div class="mensagens"></div>
+    <input type="text" />
+  </div>
+</hidden>
+
+<style>
+  div.mensagens {
+    display: flex;
+    flex-direction: column;
+  }
+</style>
+
+<script>
+  const input_sala = document.querySelector("input#sala")
+  if (localStorage.sala) input_sala.value = localStorage.sala
+  input_sala.onchange = () => {
+    localStorage.sala = input_sala.value
+  }
+  const svg_iniciar = document.querySelector("svg#iniciar")
+  const ul_trackers_conectados = document.querySelector("ul#trackers_conectados")
+  const div_modelo_peer = document.querySelector("div#modelo_peer")
+  svg_iniciar.onclick = () => {
+    input_sala.disabled = true
+    svg_iniciar.classList.add("escondido")
+    var p2pt = new P2PT([
+      "wss://tracker.openwebtorrent.com",
+      "wss://tracker.btorrent.xyz",
+      "wss://tracker.fastcast.nz",
+      "wss://tracker.sloppyta.co:443/announce",
+      "wss://tracker.novage.com.ua:443/announce",
+      "wss://tracker.btorrent.xyz:443/announce",
+    ], input_sala.value)
+    document.querySelector("span#peerid").textContent = p2pt._peerId
+    p2pt.on('trackerconnect', (tracker, stats) => {
+      const li = document.createElement("li")
+      li.textContent = tracker.announceUrl
+      ul_trackers_conectados.appendChild(li)
+    })
+    p2pt.on('peerconnect', (peer) => {
+      const div = div_modelo_peer.cloneNode(true)
+      div.querySelector("span#peerid").textContent = peer.id
+      document.body.appendChild(div)
+      const input = div.querySelector("input")
+      input.onkeypress = function (peer, e) {
+        if (e.key === "Enter") {
+          p2pt.send(peer, e.target.value)
+          const span = document.createElement("span")
+          span.textContent = "<< " + e.target.value
+          peer.div_mensagens.appendChild(span)
+          e.target.value = ""
+        }
+      }.bind(this, peer)
+      peer.div_mensagens = div.querySelector("div.mensagens")
+    })
+    p2pt.on("msg", (peer, mensagem) => {
+      const span = document.createElement("span")
+      span.textContent = ">> " + mensagem
+      peer.div_mensagens.appendChild(span)
+    })
+    p2pt.start()
+  }
+</script>
