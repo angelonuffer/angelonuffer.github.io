@@ -87,7 +87,9 @@
   requisição.onsuccess = e => {
     span_carregando.hidden = true
     db = e.target.result
-    input_dia.valueAsDate = new Date()
+    const d = new Date()
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+    input_dia.valueAsDate = d
     input_dia.dispatchEvent(new Event("change"))
   }
   Element.prototype.ancestral = function (tipo) {
@@ -247,7 +249,7 @@
       return [...tr.querySelectorAll("input[type=\"time\"")].some(input => {
         if (input.value === "") {
           const agora = new Date()
-          input.value = agora.getHours() + ":" + String(agora.getMinutes()).padStart(2, "0")
+          input.value = String(agora.getHours()).padStart(2, "0") + ":" + String(agora.getMinutes()).padStart(2, "0")
           input.dispatchEvent(new Event("change"))
           return true
         }
