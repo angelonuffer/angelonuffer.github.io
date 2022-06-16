@@ -136,6 +136,7 @@
         atividades.get(tr.db_id).onsuccess = function (campo, valor, e) {
           span_carregando.hidden = true
           e.target.result[campo] = valor
+          if (! td_duração.duração) td_duração.duração = 0
           e.target.result.duração = td_duração.duração
           atividades.put(e.target.result, tr.db_id).onsuccess = () => {
             atualizar_totais()
